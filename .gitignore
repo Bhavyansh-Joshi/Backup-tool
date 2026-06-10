@@ -1,0 +1,5 @@
+.hash_db.json
+__pycache__/
+*.pyc
+BackupDrive/
+.env
