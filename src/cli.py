@@ -8,19 +8,22 @@ calling into the right module.
 
 import time
 import platform
+import logging
 from pathlib import Path
 from datetime import datetime
+
 
 from src import copy_engine, integrity, hash_db, drive_monitor
 from src.formatter import format_drive, FormatError
 from src.config import DESTINATION, POLL_INTERVAL
 
+logger = logging.getLogger("Backup")
 
 #===============Output Header========================
 
 def log(msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
-    print(f"[{ts}] {msg}")
+    logger.info(f"[{ts}] {msg}")
 
 def sep():
     print("-" * 60)
@@ -42,36 +45,39 @@ def prompt_format(mount_point: str):
     # Double-confirmed format prompt.
     sep()
     print()
-    print(" ✅ All files copied and verified.")
-    print(f"  Drive       : {mount_point}")
-    print(f"  Backed up to: {DESTINATION}")
+    logger.info(" [OK] All files copied and verified.")
+    logger.info(f"  Drive       : {mount_point}")
+    logger.info(f"  Backed up to: {DESTINATION}")
     print()
-    print(" ⚠️ WARNING: Formatting PERMANENTLY erases the drive.")
+    logger.info("  [WARNING]: Formatting PERMANENTLY erases the drive.")
     print()
 
     if not confirm("  Format this drive?"):
-        log("Format skipped. Drive untouched.")
+        logger.info("Format skipped. Drive untouched.")
         return
 
     typed = input(f"\n  Type the drive path to confirm [{mount_point}]: ").strip()
     if typed != mount_point:
-        log("Path didn't match. Format cancelled.")
+        logger.info("Path didn't match. Format cancelled.")
         return
 
-    log("Formatting...")
+    logger.info("Formatting.......")
     try:
         format_drive(mount_point)
-        log("✅  Drive formatted.")
+        logger.info("[OK]  Drive formatted.")
     except FormatError as e:
-        log(f"❌  Format failed: {e}")
+        logger.error(f"[ERROR]  Format failed: {e}")
 
 #===============Display==============================
 
 def show_header():
     sep()
-    print("====Backup Tool====")
-    print(f" Destination : {DESTINATION}")
-    print(f" Platform : {platform.system()}")
+    logger.info("=" * 40)
+    logger.info("Backup session started")
+    logger.info("=" * 40)
+    logger.info("======Backup Tool=======")
+    logger.info(f" Destination : {DESTINATION}")
+    logger.info(f" Platform : {platform.system()}")
     sep()
 
 def show_menu() -> str:
@@ -85,37 +91,37 @@ def show_menu() -> str:
 def run_integrity_screen():
     # Shows the result of integrity check
     sep()
-    log("Running integrity check....")
+    logger.info("Running integrity check....")
     sep()
 
     result = integrity.check()
 
     if result is None:
-        log("No data found in the backup")
+        logger.info("No data found in the backup")
         return
     
     sep()
-    log("Integrity Check Successful: ")
-    print(f"  ✅ {result.ok} files(s) intact!!!")
+    logger.info("Integrity Check Successful: ")
+    logger.info(f"  [OK] {result.ok} files(s) intact!!!")
 
     if result.corrupted:
-        print(f"  ⛔ {result.corrupted} file(s) CORRUPTED:")
+        logger.info(f"  [ERROR] {result.corrupted} file(s) CORRUPTED:")
         for f in result.corrupted_files:
-            print(f"      -{f}")
+            logger.info(f"      -{f}")
 
     if result.untracked:
-        print(f"  ⚠️ {result.untracked} untracked file(s)")
+        logger.warning(f"  [WARNING] {result.untracked} untracked file(s)")
 
     if result.is_clean:
-        log("✅  Backup is fully intact.")
+        logger.info("[OK]  Backup is fully intact.")
     else:
-        log("⚠️  Issues found. See above.")
+        log.warning("[WARNING]  Issues found. See above.")
 
 
 
 def run_backup_loop():
     # Poll for drives and run backup when one appears.
-    log(f"Polling every {POLL_INTERVAL}s. Press Ctrl+C to stop.")
+    logger.info(f"Polling every {POLL_INTERVAL}s. Press Ctrl+C to stop.")
     print()
 
     db = hash_db.load()
@@ -130,11 +136,11 @@ def run_backup_loop():
                 source_root  = Path(new_mount)
 
                 sep()
-                log(f"New drive detected: {new_mount}")
+                logger.info(f"New drive detected: {new_mount}")
                 sep()
 
-                if not confirm(f"  Back up '{new_mount}' → '{DESTINATION}'?"):
-                    log("Cancelled.")
+                if not confirm(f"  Back up '{new_mount}' -> '{DESTINATION}'?"):
+                    logger.info("Cancelled.")
                     print()
                     continue
 
@@ -142,32 +148,32 @@ def run_backup_loop():
                 dest = DESTINATION / ts_folder
                 dest.mkdir(parents=True, exist_ok=True)
 
-                log(f"Starting backup → {dest}")
+                logger.info(f"Starting backup -> {dest}")
                 sep()
 
                 result = copy_engine.backup(source_root, dest, db)
 
                 sep()
-                log(
+                logger.info(
                     f"Done — {result.copied} copied, "
                     f"{result.skipped} skipped (duplicates), "
                     f"{result.failed} failed."
                 )
 
                 if result.failed_files:
-                    print("\n  Failed:")
+                    logger.error("\n  Failed:")
                     for f in result.failed_files:
-                        print(f"    - {f}")
+                        logger.error(f"    - {f}")
                     print()
-                    log("⚠️  Not prompting format — failures detected.")
+                    logger.warning("[warning]  Not prompting format — failures detected.")
                 else:
                     prompt_format(new_mount)
 
                 print()
-                log("Ready for next drive.")
+                logger.info("Ready for next drive.")
 
             time.sleep(POLL_INTERVAL)
 
     except KeyboardInterrupt:
         print()
-        log("Stopped.")
+        logger.info("Stopped.")

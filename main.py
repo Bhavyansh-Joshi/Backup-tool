@@ -10,11 +10,12 @@ Cross-platform: Windows, macOS, Linux.
 
 from src.config import DESTINATION
 from src.cli import show_header, show_menu, run_backup_loop, run_integrity_screen
-
+from src.logger import setup_logger
 
 def main():
     DESTINATION.mkdir(parents=True, exist_ok=True)
 
+    setup_logger();
     show_header()
     choice = show_menu()
 

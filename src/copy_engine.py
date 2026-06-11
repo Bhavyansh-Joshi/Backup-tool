@@ -11,12 +11,15 @@ Core backup logic:
 """
 
 import shutil
+import logging
 from pathlib import Path
 from dataclasses import dataclass, field
 
 from src import hasher, hash_db
 from src.config import SKIP_EXTENSIONS
 
+
+logger = logging.getLogger("Backup")
 
 @dataclass
 class CopyResult:
@@ -99,10 +102,10 @@ def backup(source_root: Path, dest_root: Path, db: dict) -> CopyResult:
 # Internal event emitters (simple print for now, easy to swap for callbacks) ──
 
 def _emit_ok(rel: Path):
-    print(f"  ✅  {rel}")
+    logger.info(f"  [OK]  {rel}")
 
 def _emit_skip(rel: Path, duplicate_of: str):
-    print(f"  🔄️  {rel}  ← duplicate of '{duplicate_of}', skipped")
+    logger.info(f"  [SKIPPED] {rel}  <- duplicate of '{duplicate_of}', skipped")
 
 def _emit_fail(rel: Path, reason: str):
-    print(f"  ⛔  {rel}  ← {reason}")
+    logger.error(f"  [FAILED]  {rel}  <- {reason}")

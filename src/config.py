@@ -17,4 +17,7 @@ HASH_DB_FILE: Path = DESTINATION / ".hash_db.json"
 POLL_INTERVAL: int = 3
 
 # File extention to always skip
-SKIP_EXTENSIONS: set[str] = {".tmp", ".ds_store", ".hash_db"}
+SKIP_EXTENSIONS: set[str] = {".tmp", ".ds_store", ".hash_db", ".pif"}
+
+# Log file to add logs
+LOG_DIR: Path = DESTINATION / "logs/backup.log"
