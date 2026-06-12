@@ -21,3 +21,10 @@ SKIP_EXTENSIONS: set[str] = {".tmp", ".ds_store", ".hash_db", ".pif"}
 
 # Log file to add logs
 LOG_DIR: Path = DESTINATION / "logs/backup.log"
+
+# Destination for dumping the data of a SD-card or drive
+DUMP_PRIMARY: Path = Path.home()/ "F:/DumpStore"
+DUMP_SECONDARY: Path = Path.home()/ "F:/DumpStore"
+
+# Where the hash is stored inside DESTINATION
+DUMP_DB_FILE: Path = DUMP_PRIMARY / ".dump_db.json"

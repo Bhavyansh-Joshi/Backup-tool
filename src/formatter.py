@@ -39,7 +39,7 @@ def format_drive(mount_point: str) -> None:
 def _format_windows(mount_point: str) -> None:
     drive_letter = Path(mount_point).drive  # e.g. "E:"
     result = subprocess.run(
-        ["format", drive_letter, "/FS:FAT32", "/Q", "/Y"],
+        ["cmd", "/c", "format", drive_letter, "/FS:FAT32", "/Q", "/Y"],
         capture_output=True, text=True, timeout=120
     )
     if result.returncode != 0:

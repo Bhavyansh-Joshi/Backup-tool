@@ -1,6 +1,6 @@
 """
 cli.py
-------
+--------------
 All terminal UI: menus, prompts, status output.
 No business logic here — only user interaction and
 calling into the right module.
@@ -13,17 +13,13 @@ from pathlib import Path
 from datetime import datetime
 
 
-from src import copy_engine, integrity, hash_db, drive_monitor
+from src import copy_engine, integrity, hash_db, drive_monitor, dump_db, dump_engine
 from src.formatter import format_drive, FormatError
-from src.config import DESTINATION, POLL_INTERVAL
+from src.config import DESTINATION, POLL_INTERVAL, DUMP_PRIMARY, DUMP_SECONDARY
 
 logger = logging.getLogger("Backup")
 
 #===============Output Header========================
-
-def log(msg: str):
-    ts = datetime.now().strftime("%H:%M:%S")
-    logger.info(f"[{ts}] {msg}")
 
 def sep():
     print("-" * 60)
@@ -84,9 +80,11 @@ def show_menu() -> str:
     print()
     print(" [1] Wait for a drive to backup.")
     print(" [2] Run integrity check on backup.")
-    print(" [3] Exit.")
+    print(" [3] SD Card/Pendrive Dump")
+    print(" [4] Clean empty folders on a drive")
+    print(" [5] Exit.")
     print()
-    return input(" Choice [1/2/3] : ").strip()
+    return input(" Choice [1/2/3/4] : ").strip()
 
 def run_integrity_screen():
     # Shows the result of integrity check
@@ -115,7 +113,7 @@ def run_integrity_screen():
     if result.is_clean:
         logger.info("[OK]  Backup is fully intact.")
     else:
-        log.warning("[WARNING]  Issues found. See above.")
+        logger.warning("[WARNING]  Issues found. See above.")
 
 
 
@@ -165,7 +163,7 @@ def run_backup_loop():
                     for f in result.failed_files:
                         logger.error(f"    - {f}")
                     print()
-                    logger.warning("[warning]  Not prompting format — failures detected.")
+                    logger.warning("[warning]  Not prompting format - failures detected.")
                 else:
                     prompt_format(new_mount)
 
@@ -177,3 +175,83 @@ def run_backup_loop():
     except KeyboardInterrupt:
         print()
         logger.info("Stopped.")
+
+
+def dump_engine_loop():
+    # Poll for drives and run backup when one appears.
+    logger.info(f"Polling every {POLL_INTERVAL}s. Press Ctrl+C to stop.")
+    print()
+
+    db = dump_db.load()
+    known_drives = drive_monitor.get_mounted_drives()
+
+    try:
+        while True:
+            new_mount = drive_monitor.find_new_drive(known_drives)
+
+            if new_mount:
+                known_drives = drive_monitor.get_mounted_drives()
+                source_root = Path(new_mount)
+
+                sep()
+                logger.info(f"New drive detected: {new_mount}")
+                sep()
+
+                if not confirm(f"  Back up '{new_mount}' -> '{DUMP_PRIMARY}'?"):
+                    logger.info("Cancelled.")
+                    print()
+                    continue
+                
+                ts_folder = datetime.now().strftime("Dump_%d-%b-%Y_%H-%M")
+                dest = DUMP_PRIMARY / ts_folder
+                sec_dest = DUMP_SECONDARY/ ts_folder
+                dest.mkdir(parents=True, exist_ok=True)
+                sec_dest.mkdir(parents=True, exist_ok=True)
+
+                logger.info(f"Starting dump -> {dest}")
+                sep()
+                
+                result = dump_engine.transfer(source_root, dest, sec_dest, db)
+
+                sep()
+                logger.info(
+                    f"Done — {result.transferred} copied, "
+                    f"{result.skipped} skipped (duplicates), "
+                    f"{result.failed} failed."
+                )
+
+                if result.failed_files:
+                    logger.error("\n  Failed:")
+                    for f in result.failed_files:
+                        logger.error(f"    - {f}")
+                    print()
+                    logger.warning("[WARNING] Not prompting format - failures detected.")
+                else:
+                    dump_engine.delete_originals(source_root, result.safe_to_delete)
+                    dump_engine.cleanup_empty_folders(source_root)
+                    prompt_format(new_mount)
+                print()
+                logger.info("Ready for next drive.")
+
+            time.sleep(POLL_INTERVAL)
+
+    except KeyboardInterrupt:
+        print()
+        logger.info("Stopped.")
+
+def run_cleanup_screen():
+    sep()
+    path_str = input("  Enter the drive or folder path to clean: ").strip()
+    target = Path(path_str)
+
+    if not target.exists():
+        logger.error(f"[ERROR] Path does not exist: {target}")
+        return
+
+    if not confirm(f"  Remove all empty folders inside '{target}'?"):
+        logger.info("Cancelled.")
+        return
+
+    sep()
+    dump_engine.cleanup_empty_folders(target)
+    logger.info("[OK] Cleanup complete.")
